@@ -69,7 +69,8 @@ class GQAttention(nn.Module):
 
 class GQSWAttention(nn.Module):
 
-    def __init__(self, idim, n_heads, num_groups, head_dim, dtype, window_size=None, use_sliding_window=False, qk_norm=False):
+    def __init__(self, idim, n_heads, num_groups, head_dim, dtype, window_size=None, use_sliding_window=False, qk_norm=False,
+                 query_pre_attn_scalar=None):
         super(GQSWAttention, self).__init__()
         self.idim = idim
         self.n_heads = n_heads
@@ -80,7 +81,10 @@ class GQSWAttention(nn.Module):
 
         self.odim = self.n_heads * self.head_dim
 
-        self.scale = self.head_dim ** -0.5
+        if query_pre_attn_scalar is not None:
+            self.scale = (query_pre_attn_scalar) ** -0.5
+        else:
+            self.scale = (head_dim) ** -0.5
 
         self.q_proj = nn.Linear(self.idim, self.odim, dtype=dtype, bias=False)
         self.k_proj = nn.Linear(self.idim, self.n_kv_embed, dtype=dtype, bias=False)
