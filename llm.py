@@ -24,9 +24,7 @@ class GemmaBlock(nn.Module):
         super().__init__()
 
         self.norm1 = RMSNorm(dim)
-        if i == 0:
-            sliding_window = True
-        elif i % 6 == 0:
+        if (i + 1) % 6 == 0:
             sliding_window = False
         else:
             sliding_window = True
