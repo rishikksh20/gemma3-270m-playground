@@ -5,7 +5,7 @@ from pathlib import Path
 from safetensors.torch import load_file
 from huggingface_hub import hf_hub_download
 from modules.mapping import load_weights_into_gemma
-from modules.sampling import advance_decoding, greedy_decoding
+from modules.sampling import advance_decoding
 from modules.tokenizer import GemmaTokenizer
 
 
@@ -83,20 +83,6 @@ def test_gemma3_270M(prompt, config):
             end="",
             flush=True
         )
-
-    for token in greedy_decoding(
-                                model=model,
-                                token_ids=input_token_ids_tensor,
-                                max_new_tokens=500,
-                                eos_token_id=tokenizer.encode("<end_of_turn>")[-1]
-                            ):
-        token_id = token.squeeze(0).tolist()
-        print(
-            tokenizer.decode(token_id),
-            end="",
-            flush=True
-        )
-
 
 if __name__ == "__main__":
     prompt = "Please explain the climate change and how it impacts our future."

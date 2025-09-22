@@ -34,7 +34,7 @@ class GemmaBlock(nn.Module):
         self.ff = GatedFeedForward(dim, mlp_dim, dtype)
         self.norm4 = RMSNorm(dim)
 
-    def forward(self, x, cos, sin, cos_local, sin_local, mask=None):
+    def forward(self, x, cos, sin, cos_local, sin_local, mask):
         res = x
         x = self.norm1(x)
         if self.sliding_window:
@@ -60,7 +60,8 @@ class Gemma3Model(nn.Module):
         self.final_proj = nn.Linear(dim, vocab_size, bias=False, dtype=dtype)
 
         cos, sin = rope_rotate(head_dim, context_length)
-
+        self.window_size = window_size
+        self.dim = dim
         # Reusable utilities    
         cos_local, sin_local = rope_rotate(
             head_dim, context_length, 10000.0
@@ -75,10 +76,9 @@ class Gemma3Model(nn.Module):
 
     def forward(self, inp):
 
-        emb = self.tok_emb(inp)
-        n = emb.shape[1]
+        x = self.tok_emb(inp) * (self.dim ** 0.5)
+        n = x.shape[1]
         mask = torch.triu(torch.ones(n, n, device=inp.device, dtype=torch.bool), diagonal=1)
-        x = emb
 
         for gemma3 in self.blocks:
             x = gemma3(x, self.cos, self.sin, self.cos_local, self.sin_local, mask)
@@ -90,7 +90,7 @@ class Gemma3Model(nn.Module):
 if __name__ == "__main__":
     GEMMA270M_CONFIG = {
         "vocab_size": 262_144,  # Vocabulary size
-        "context_length": 32_768,  # Context length that was used to train the model
+        "context_length": 32768,  # Context length that was used to train the model
         "emb_dim": 640,  # Embedding dimension
         "n_heads": 4,  # Number of attention heads
         "n_layers": 18,  # Number of layers
