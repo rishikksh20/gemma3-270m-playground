@@ -1,6 +1,6 @@
 import torch, math
 
-def rope_rotate(head_dim, context_length, device='cpu'):
+def rope_rotate(head_dim, context_length, theta_base=1000000, device='cpu'):
     """
     x: (B, H, L, Dh) queries or keys (Dh even)
     positions: (L,) absolute positions (0..L-1)
@@ -9,7 +9,7 @@ def rope_rotate(head_dim, context_length, device='cpu'):
     half = head_dim // 2
     # Generate position indices
     positions = torch.arange(context_length, dtype=torch.float32, device=device)
-    freqs = torch.exp(-math.log(1000000) * torch.arange(0, half, device=device) / half)  # (half,)
+    freqs = torch.exp(-math.log(theta_base) * torch.arange(0, half, device=device) / half)  # (half,)
     angles = torch.einsum('l, h -> lh', positions.float(), freqs)                  # (L, half)
 
     combined_angles = torch.cat([angles, angles], dim=1)                         # (L, head_dim)

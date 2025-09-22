@@ -25,19 +25,22 @@ class GemmaBlock(nn.Module):
         self.norm1 = RMSNorm(dim)
         self.norm2 = RMSNorm(dim)
         if layer == "full_attention":
-            sliding_window = False
+            self.sliding_window = False
         else:
-            sliding_window = True
+            self.sliding_window = True
         self.attn = GQSWAttention(dim, n_heads = n_heads, num_groups=num_groups, head_dim = head_dim, dtype=dtype,  window_size=window_size,
-                                   use_sliding_window=sliding_window, qk_norm=qk_norm)
+                                   use_sliding_window=self.sliding_window, qk_norm=qk_norm)
         self.norm3 = RMSNorm(dim)
         self.ff = GatedFeedForward(dim, mlp_dim, dtype)
         self.norm4 = RMSNorm(dim)
 
-    def forward(self, x, cos, sin, mask=None):
+    def forward(self, x, cos, sin, cos_local, sin_local, mask=None):
         res = x
         x = self.norm1(x)
-        x = self.attn(x, cos, sin, mask)
+        if self.sliding_window:
+            x = self.attn(x, cos_local, sin_local, mask)
+        else:
+            x = self.attn(x, cos, sin, mask)
         x = self.norm2(x) + res
         res = x
         x = self.norm3(x)
@@ -57,8 +60,16 @@ class Gemma3Model(nn.Module):
         self.final_proj = nn.Linear(dim, vocab_size, bias=False, dtype=dtype)
 
         cos, sin = rope_rotate(head_dim, context_length)
-        self.register_buffer("cos", cos)
-        self.register_buffer("sin", sin)
+
+        # Reusable utilities    
+        cos_local, sin_local = rope_rotate(
+            head_dim, context_length, 10000.0
+        )
+
+        self.register_buffer("cos_local", cos_local, persistent=False)
+        self.register_buffer("sin_local", sin_local, persistent=False)
+        self.register_buffer("cos", cos, persistent=False)
+        self.register_buffer("sin", sin, persistent=False)
         self.dtype = dtype
 
 
@@ -70,7 +81,7 @@ class Gemma3Model(nn.Module):
         x = emb
 
         for gemma3 in self.blocks:
-            x = gemma3(x, self.cos, self.sin, mask)
+            x = gemma3(x, self.cos, self.sin, self.cos_local, self.sin_local, mask)
 
         x = self.final_norm(x)
         x = self.final_proj(x.to(self.dtype))
