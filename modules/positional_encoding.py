@@ -1,6 +1,6 @@
 import torch, math
 
-def rope_rotate(head_dim, context_length, theta_base=1000000, device='cpu'):
+def rope_rotate(head_dim, context_length, theta_base=1000000.0, device='cpu'):
     """
     x: (B, H, L, Dh) queries or keys (Dh even)
     positions: (L,) absolute positions (0..L-1)
