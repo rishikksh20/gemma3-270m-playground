@@ -20,11 +20,11 @@ class GatedFeedForward(nn.Module):
 
 
 class GemmaBlock(nn.Module):
-    def __init__(self, i, dim, n_heads, num_groups, head_dim, mlp_dim, window_size, qk_norm, dtype):
+    def __init__(self, layer, dim, n_heads, num_groups, head_dim, mlp_dim, window_size, qk_norm, dtype):
         super().__init__()
         self.norm1 = RMSNorm(dim)
         self.norm2 = RMSNorm(dim)
-        if (i + 1) % 6 == 0:
+        if layer == "full_attention":
             sliding_window = False
         else:
             sliding_window = True
@@ -35,18 +35,23 @@ class GemmaBlock(nn.Module):
         self.norm4 = RMSNorm(dim)
 
     def forward(self, x, cos, sin, mask=None):
-
-        x = self.norm2(self.attn(self.norm1(x), cos, sin, mask)) + x
-        x = self.norm4(self.ff(self.norm3(x))) + x
+        res = x
+        x = self.norm1(x)
+        x = self.attn(x, cos, sin, mask)
+        x = self.norm2(x) + res
+        res = x
+        x = self.norm3(x)
+        x = self.ff(x)
+        x = self.norm4(x) + res
         return x
 
 
 class Gemma3Model(nn.Module):
-    def __init__(self, dim, depth, n_heads, num_groups, head_dim, mlp_dim, vocab_size, context_length, window_size,
+    def __init__(self, dim, depth, n_heads, num_groups, head_dim, mlp_dim, vocab_size, context_length, window_size, layer_types,
                  qk_norm=True, dtype=torch.bfloat16):
         super().__init__()
         self.tok_emb = nn.Embedding(vocab_size, dim, dtype=dtype)
-        self.blocks = nn.ModuleList([GemmaBlock(i, dim, n_heads, num_groups, head_dim, mlp_dim, window_size, qk_norm,dtype) for i in range(depth)])
+        self.blocks = nn.ModuleList([GemmaBlock(layer, dim, n_heads, num_groups, head_dim, mlp_dim, window_size, qk_norm,dtype) for layer in layer_types])
 
         self.final_norm = RMSNorm(dim, eps=1e-6)
         self.final_proj = nn.Linear(dim, vocab_size, bias=False, dtype=dtype)
@@ -84,13 +89,33 @@ if __name__ == "__main__":
         "n_kv_groups": 1,  # Key-Value groups for grouped-query attention
         "rope_base": 1_000_000.0,  # The base in RoPE's "theta"
         "sliding_window": 512,  # Sliding window attention size
+        "layer_types": [
+        "sliding_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "full_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "full_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "sliding_attention",
+        "full_attention"
+    ],
         "dtype": torch.bfloat16
     }
     model = Gemma3Model(dim=GEMMA270M_CONFIG["emb_dim"], depth=GEMMA270M_CONFIG["n_layers"], n_heads=GEMMA270M_CONFIG["n_heads"],
                        num_groups=GEMMA270M_CONFIG["n_kv_groups"], head_dim=GEMMA270M_CONFIG["head_dim"],
                        mlp_dim=GEMMA270M_CONFIG["hidden_dim"],
                        vocab_size=GEMMA270M_CONFIG["vocab_size"], context_length=GEMMA270M_CONFIG["context_length"],
-                       window_size=GEMMA270M_CONFIG["sliding_window"], dtype=GEMMA270M_CONFIG["dtype"])
+                       window_size=GEMMA270M_CONFIG["sliding_window"], layer_types=GEMMA270M_CONFIG["layer_types"], dtype=GEMMA270M_CONFIG["dtype"])
     device = torch.device("cpu")
     out = model(torch.tensor([1, 2, 3]).unsqueeze(0)).to(device)
 
